@@ -39,12 +39,12 @@
  * Get some sort of key-hash for hash table indexing purposes.
  */
 static int
-keynote_keyhash(void *key, int alg)
+keynote_keyhash(const void *key, int alg)
 {
-    struct keynote_binary *bn;
-    unsigned int res = 0, i;
-    DSA *dsa;
-    RSA *rsa;
+    const struct keynote_binary *bn;
+    unsigned long res = 0, i;
+    const DSA *dsa;
+    const BIGNUM *p, *q, *g, *n, *e;
 
     if (key == NULL)
       return 0;
@@ -52,31 +52,27 @@ keynote_keyhash(void *key, int alg)
     switch (alg)
     {
 	case KEYNOTE_ALGORITHM_DSA:
-	    dsa = (DSA *) key;
-	    res += BN_mod_word(dsa->p, HASHTABLESIZE);
-	    res += BN_mod_word(dsa->q, HASHTABLESIZE);
-	    res += BN_mod_word(dsa->g, HASHTABLESIZE);
-	    res += BN_mod_word(dsa->pub_key, HASHTABLESIZE);
-	    return res % HASHTABLESIZE;
+	    dsa = (const DSA *) key;
+	    DSA_get0_pqg(dsa, &p, &q, &g);
+	    res += BN_mod_word(p, HASHTABLESIZE);
+	    res += BN_mod_word(q, HASHTABLESIZE);
+	    res += BN_mod_word(g, HASHTABLESIZE);
+	    res += BN_mod_word(DSA_get0_pub_key(dsa), HASHTABLESIZE);
+	    return (int)(res % HASHTABLESIZE);
 
         case KEYNOTE_ALGORITHM_RSA:
-	    rsa = (RSA *) key;
-            res += BN_mod_word(rsa->n, HASHTABLESIZE);
-            res += BN_mod_word(rsa->e, HASHTABLESIZE);
-	    return res % HASHTABLESIZE;
-
 	case KEYNOTE_ALGORITHM_X509: /* RSA-specific */
-	    rsa = (RSA *) key;
-            res += BN_mod_word(rsa->n, HASHTABLESIZE);
-            res += BN_mod_word(rsa->e, HASHTABLESIZE);
-	    return res % HASHTABLESIZE;
+	    RSA_get0_key((const RSA *) key, &n, &e, NULL);
+            res += BN_mod_word(n, HASHTABLESIZE);
+            res += BN_mod_word(e, HASHTABLESIZE);
+	    return (int)(res % HASHTABLESIZE);
 
 	case KEYNOTE_ALGORITHM_BINARY:
-	    bn = (struct keynote_binary *) key;
+	    bn = (const struct keynote_binary *) key;
 	    for (i = 0; i < bn->bn_len; i++)
 	      res = (res + ((unsigned char) bn->bn_key[i])) % HASHTABLESIZE;
 
-	    return res;
+	    return (int)res;
 
 	case KEYNOTE_ALGORITHM_NONE:
 	    return keynote_stringhash(key, HASHTABLESIZE);
@@ -504,7 +500,7 @@ keynote_free_assertion(struct assertion *as)
 }
 
 unsigned int 
-keynote_stringhash(char *name, unsigned int size)
+keynote_stringhash(const char *name, unsigned int size)
 {
     unsigned int hash_val = 0;
     unsigned int i;

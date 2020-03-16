@@ -158,7 +158,7 @@ extern void keynote_keylist_free(struct keylist *);
 extern void keynote_free_env(struct environment *);
 extern int  keynote_in_authorizers(void *, int);
 extern int  keynote_sremove_assertion(int, int);
-extern unsigned int keynote_stringhash(char *, unsigned int);
+extern unsigned int keynote_stringhash(const char *, unsigned int);
 extern char *keynote_get_private_key(char *);
 extern void keynote_free_key(void *, int);
 extern int keynote_evaluate_query(void);

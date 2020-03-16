@@ -63,7 +63,7 @@ keynote_get_action_authorizers(char *name)
 {
     struct keylist *kl;
     size_t cachesize;
-    int len;
+    size_t len;
 
     if (!strcmp(name, KEYNOTE_CALLBACK_CLEANUP) ||
         !strcmp(name, KEYNOTE_CALLBACK_INITIALIZE))
@@ -112,7 +112,7 @@ keynote_get_action_authorizers(char *name)
 static char *
 keynote_get_values(char *name)
 {
-    int i, len;
+    size_t i, len;
     size_t cachesize;
 
     if (!strcmp(name, KEYNOTE_CALLBACK_CLEANUP) ||
@@ -170,7 +170,7 @@ keynote_free_env(struct environment *en)
         free(en->env_value);
     }
     else
-      ((char * (*) (char *))en->env_value)(KEYNOTE_CALLBACK_CLEANUP);
+      (*en->env_func)(KEYNOTE_CALLBACK_CLEANUP);
 
     free(en);
 }
@@ -195,7 +195,7 @@ keynote_env_lookup(char *name, struct environment **table,
       {
 	  if ((en->env_flags & ENVIRONMENT_FLAG_FUNC) &&
 	      (en->env_value != NULL))
-	    return ((char * (*) (char *)) en->env_value)(name);
+	    return (*en->env_func)(name);
 	  else
 	    return en->env_value;
       }
@@ -284,7 +284,7 @@ keynote_env_add(char *name, char *value, struct environment **table,
     {
 	en->env_value = value;
 	en->env_flags |= ENVIRONMENT_FLAG_FUNC;
-        ((char * (*) (char *))en->env_value)(KEYNOTE_CALLBACK_INITIALIZE);
+        (*en->env_func)(KEYNOTE_CALLBACK_INITIALIZE);
 	if (keynote_errno != 0)
 	{
 	    keynote_free_env(en);
@@ -347,12 +347,12 @@ keynote_init_environment(void)
     keynote_current_session->ks_env_regex = NULL;
 
     if (keynote_env_add("_ACTION_AUTHORIZERS",
-			(char *) keynote_get_action_authorizers,
+			(void *) keynote_get_action_authorizers,
 			keynote_current_session->ks_env_table, HASHTABLESIZE,
 			ENVIRONMENT_FLAG_FUNC) != RESULT_TRUE)
       return -1;
 
-    if (keynote_env_add("_VALUES", (char *) keynote_get_values,
+    if (keynote_env_add("_VALUES", (void *) keynote_get_values,
 			keynote_current_session->ks_env_table, HASHTABLESIZE,
 			ENVIRONMENT_FLAG_FUNC) != RESULT_TRUE)
       return -1;
@@ -821,9 +821,9 @@ kn_read_asserts(char *buffer, int bufferlen, int *numassertions)
 	    {
 		if (valid)  /* Something there */
 		{
+		    size_t len = (size_t)((buffer + i) - ptr);
 		    /* Allocate enough memory */
-		    buf[*numassertions] = calloc((buffer + i) - ptr
-							  + 1, sizeof(char));
+		    buf[*numassertions] = calloc(len + 1, sizeof(char));
 		    if (buf[*numassertions] == NULL) {
 			/* Free any already-allocated strings */
 			for (flag = 0; flag < *numassertions; flag++)
@@ -834,7 +834,7 @@ kn_read_asserts(char *buffer, int bufferlen, int *numassertions)
 		    }
 
 		    /* Copy string */
-		    memcpy(buf[*numassertions], ptr, (buffer + i) - ptr);
+		    memcpy(buf[*numassertions], ptr, len);
 		    (*numassertions)++;
 		}
 
@@ -972,5 +972,5 @@ kn_get_licensees(int sessid, int assertid)
       if (keynote_parse_keypred(as, 1) != RESULT_TRUE)
 	return NULL;
 
-    return (struct keynote_keylist *) as->as_keylist;
+    return (struct keynote_keylist *)(void *)as->as_keylist;
 }

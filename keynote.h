@@ -25,7 +25,10 @@
 struct environment
 {
     char               *env_name;
-    char               *env_value;
+    union {
+	char           *env_value;
+	char * 	      (*env_func)(char *);
+    };
     int                 env_flags;
     regex_t             env_regex;
     struct environment *env_next;
@@ -161,16 +164,15 @@ int    kn_query(struct environment *, char **, int, char **, int *, int,
 
 /* Aux. routines */
 char **kn_read_asserts(char *, int, int *);
-int    kn_keycompare(void *, void *, int);
+int    kn_keycompare(const void *, const void *, int);
 void  *kn_get_authorizer(int, int, int *);
 struct keynote_keylist *kn_get_licensees(int, int);
 
 /* ASCII-encoding API */
-int    kn_encode_base64(unsigned char const *, unsigned int, char *,
-			unsigned int);
-int    kn_decode_base64(char const *, unsigned char *, unsigned int);
-int    kn_encode_hex(unsigned char *, char **, int);
-int    kn_decode_hex(char *, char **);
+int    kn_encode_base64(const unsigned char *, size_t, char *, size_t);
+int    kn_decode_base64(const char *, unsigned char *, size_t);
+int    kn_encode_hex(const unsigned char *, char **, size_t);
+int    kn_decode_hex(const char *, unsigned char **);
 
 /* Key-encoding API */
 int    kn_decode_key(struct keynote_deckey *, char *, int);

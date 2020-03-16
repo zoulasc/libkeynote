@@ -68,8 +68,7 @@ static int   get_kth(int);
 %}
 %%
 
-grammarswitch: LOCINI { keynote_exceptionflag = keynote_donteval = 0; }
-                localinit
+grammarswitch: LOCINI { keynote_exceptionflag = keynote_donteval = 0; } localinit
              | ACTSTR { keynote_exceptionflag = keynote_donteval = 0; } program
    	     | KEYPRE { keynote_exceptionflag = keynote_donteval = 0; }
                 keypredicate
@@ -86,17 +85,17 @@ grammarswitch: LOCINI { keynote_exceptionflag = keynote_donteval = 0; }
                         STRING { keynote_lex_remove($3);
 			         keynote_privkey = $3;
 			       }
-    
+    		;
 keypredicate: /* Nothing */   { keynote_returnvalue = 0;
                                 return 0; 
                               }
        | notemptykeypredicate { keynote_returnvalue = $1;
 				return 0;
                               }
-
+		;
 notemptykeypredicate:  key     { $$ = $1; }
        		     | keyexp  { $$ = $1; }
-
+		;
 keyexp: notemptykeypredicate AND { if (($1 == 0) && !keynote_justrecord)
                                      keynote_donteval = 1;
                                  } notemptykeypredicate 
@@ -133,7 +132,7 @@ keyexp: notemptykeypredicate AND { if (($1 == 0) && !keynote_justrecord)
 			    else
 			      $$ = 0;
 			  }  /* K-th */
-
+			;
 keylist: key
 	    { /* Don't do anything if we're just recording */ 
               if (!keynote_justrecord && !keynote_donteval)
@@ -150,7 +149,7 @@ keylist: key
 
 	      keylistcount++;
             }
-
+		;
 key: str        {
 		   if (keynote_donteval)
 		     $$ = 0;
@@ -188,10 +187,10 @@ key: str        {
 			 }
 		   }
                  }
-
+		;
 localinit: /* Nothing */
          | localconstants
-
+		;
 localconstants: VARIABLE EQQ STRING 
 	  {
             int i;
@@ -260,12 +259,12 @@ localconstants: VARIABLE EQQ STRING
 	    if (i != RESULT_TRUE)
 	      return -1;
 	  } localconstants
-
+		;
 program: prog { 
 	        keynote_returnvalue = $1;
 		return 0;
 	      }
-
+		;
 prog:   /* Nada */ { $$ = 0; }
        | notemptyprog {
 			  /* 
@@ -280,7 +279,7 @@ prog:   /* Nada */ { $$ = 0; }
 		      else
 			$$ = $4;
                     } 
-
+		;
 notemptyprog: expr HINT afterhint
               {
 		if (checkexception($1))
@@ -295,7 +294,7 @@ notemptyprog: expr HINT afterhint
 		else
 		  $$ = 0;
 	      }
-
+		;
 afterhint: str {  if (keynote_exceptionflag || keynote_donteval)
 		    $$ = 0;
 		  else
@@ -310,7 +309,7 @@ afterhint: str {  if (keynote_exceptionflag || keynote_donteval)
 		  }
                 }
          | OPENBLOCK prog CLOSEBLOCK { $$ = $2; }
-
+		;
 
 expr:     OPENPAREN expr CLOSEPAREN 	{ $$ = $2; }
 	| expr AND { if ($1 == 0)
@@ -329,19 +328,19 @@ expr:     OPENPAREN expr CLOSEPAREN 	{ $$ = $2; }
 	| stringexp 			{ $$ = $1; }
         | TRUE	  		        { $$ = 1; }
         | FALSE	  		        { $$ = 0; }
-
+		;
 numexp:	  numex LT numex { $$ = $1 < $3; }
 	| numex GT numex { $$ = $1 > $3; }
 	| numex EQ numex { $$ = $1 == $3; }
 	| numex LE numex { $$ = $1 <= $3; }
 	| numex GE numex { $$ = $1 >= $3; }
 	| numex NE numex { $$ = $1 != $3; }
-
+		;
 floatexp: floatex LT floatex { $$ = $1 < $3; }
 	| floatex GT floatex { $$ = $1 > $3; }
 	| floatex LE floatex { $$ = $1 <= $3; }
 	| floatex GE floatex { $$ = $1 >= $3; }
-
+		;
 numex:	  numex PLUS numex  { $$ = $1 + $3; }
 	| numex MINUS numex { $$ = $1 - $3; }
 	| numex MULT numex  { $$ = $1 * $3; }
@@ -379,7 +378,7 @@ numex:	  numex PLUS numex  { $$ = $1 + $3; }
 					      free($2);
 					  }
 					}
-
+		;
 floatex:  floatex PLUS floatex  	{ $$ = ($1 + $3); }
 	| floatex MINUS floatex 	{ $$ = ($1 - $3); }
 	| floatex MULT floatex          { $$ = ($1 * $3); }
@@ -413,7 +412,7 @@ floatex:  floatex PLUS floatex  	{ $$ = ($1 + $3); }
 					      free($2);
 					  }
 	                                }
-
+		;
 stringexp: str EQ str {
                         if (keynote_exceptionflag || keynote_donteval)
 			  $$ = 0;
@@ -531,8 +530,9 @@ stringexp: str EQ str {
 
 			  for (i = 1; i < 32 && pmatch[i].rm_so != -1; i++)
 			  {
-			      gr = calloc(pmatch[i].rm_eo - pmatch[i].rm_so +
-					  1, sizeof(char));
+			      size_t l = (size_t)(
+				  pmatch[i].rm_eo - pmatch[i].rm_so);
+			      gr = calloc(l + 1, sizeof(char));
 			      if (gr == NULL)
 			      {
 				  free($1);
@@ -541,9 +541,8 @@ stringexp: str EQ str {
 				  return -1;
 			      }
 
-			      strncpy(gr, $1 + pmatch[i].rm_so,
-				      pmatch[i].rm_eo - pmatch[i].rm_so);
-			      gr[pmatch[i].rm_eo - pmatch[i].rm_so] = '\0';
+			      strncpy(gr, $1 + pmatch[i].rm_so, l);
+			      gr[l] = '\0';
 			      snprintf(grp, sizeof grp, "_%d", i);
 			      if (keynote_env_add(grp, gr, &keynote_temp_list,
 						  1, 0) == -1)
@@ -563,12 +562,12 @@ stringexp: str EQ str {
 		  }
 	      }
 	    }
-
+		;
 str: str DOTT str    {  if (keynote_exceptionflag || keynote_donteval)
 			  $$ = NULL;
 			else
 			{
-			    int len = strlen($1) + strlen($3) + 1;
+			    size_t len = strlen($1) + strlen($3) + 1;
 			    $$ = calloc(len, sizeof(char));
 			    keynote_lex_remove($1);
 			    keynote_lex_remove($3);
@@ -587,7 +586,7 @@ str: str DOTT str    {  if (keynote_exceptionflag || keynote_donteval)
 			}
 		      }
 	| strnotconcat { $$ = $1; }
-
+		;
 strnotconcat: STRING 	                { $$ = $1; }
         | OPENPAREN str CLOSEPAREN 	{ $$ = $2; }
         | VARIABLE      {  if (keynote_exceptionflag || keynote_donteval)
@@ -642,6 +641,7 @@ strnotconcat: STRING 	                { $$ = $1; }
 				  return -1;
 			    }
 			 }
+		;
 %%
 
 /*
@@ -806,12 +806,13 @@ intpow(int x, int y)
     if (y < 0)
       return 0;
 
-    while (y)
+    unsigned int yp = y;
+    while (yp)
     {
-	if (y & 1)
+	if (yp & 1)
 	  s *= x;
 	
-	y >>= 1;
+	yp >>= 1;
 	x *= x;
     }
 
@@ -824,7 +825,8 @@ intpow(int x, int y)
 static int
 isfloatstring(char *s)
 {
-    int i, point = 0;
+    size_t i;
+    int point = 0;
     
     for (i = strlen(s) - 1; i >= 0; i--)
       if (!isdigit((unsigned char)s[i]))
@@ -897,5 +899,5 @@ keynote_cleanup_kth(void)
 }
 
 void
-knerror(char *s)
+knerror(char *s __unused)
 {}

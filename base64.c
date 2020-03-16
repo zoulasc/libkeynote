@@ -34,11 +34,8 @@ int __b64_ntop(unsigned char const *, size_t, char *, size_t);
 int __b64_pton(char const *, unsigned char *, size_t);
 
 int
-kn_encode_base64(src, srclength, target, targsize)
-unsigned char const *src;
-unsigned int srclength;
-char *target;
-unsigned int targsize;
+kn_encode_base64(const unsigned char *src, size_t srclength, char *target,
+    size_t targsize)
 {
     int i;
 
@@ -49,10 +46,7 @@ unsigned int targsize;
 }
 
 int
-kn_decode_base64(src, target, targsize)
-char const *src;
-unsigned char *target;
-unsigned int targsize;
+kn_decode_base64(const char *src, unsigned char *target, size_t targsize)
 {
     int i;
 

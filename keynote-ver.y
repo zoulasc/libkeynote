@@ -46,7 +46,7 @@ program: expr
 				 return keynote_errno;
                                free($1);
                              }
-
+		;
 expr: VSTRING EQ STRING      { int i = kn_add_action(sessid, $1, $3, 0);
 
                                if (i != 0)
@@ -61,6 +61,7 @@ expr: VSTRING EQ STRING      { int i = kn_add_action(sessid, $1, $3, 0);
 			       free($1);
 			       free($3);
                              } expr 
+		;
 %%
 void
 kverror(char *s)

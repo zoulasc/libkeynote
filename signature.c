@@ -52,7 +52,7 @@ static const char hextab[] = {
  * Actual conversion to hex.
  */   
 static void
-bin2hex(unsigned char *data, unsigned char *buffer, int len)
+bin2hex(const unsigned char *data, unsigned char *buffer, size_t len)
 {
     int off = 0;
      
@@ -69,7 +69,7 @@ bin2hex(unsigned char *data, unsigned char *buffer, int len)
  * Encode a binary string with hex encoding. Return 0 on success.
  */
 int
-kn_encode_hex(unsigned char *buf, char **dest, int len)
+kn_encode_hex(const unsigned char *buf, char **dest, size_t len)
 {
     keynote_errno = 0;
     if (dest == NULL)
@@ -85,7 +85,7 @@ kn_encode_hex(unsigned char *buf, char **dest, int len)
 	return -1;
     }
 
-    bin2hex(buf, *dest, len);
+    bin2hex((const unsigned char *)buf, (unsigned char *)*dest, len);
     return 0;
 }
 
@@ -94,7 +94,7 @@ kn_encode_hex(unsigned char *buf, char **dest, int len)
  * will be half as large as the first.
  */
 int
-kn_decode_hex(char *hex, char **dest)
+kn_decode_hex(const char *hex, unsigned char **dest)
 {
     int i, decodedlen;
     char ptr[3];
@@ -387,7 +387,7 @@ kn_decode_key(struct keynote_deckey *dc, char *key, int keytype)
 
 	case ENCODING_HEX:
             len = strlen(key) / 2;
-	    if (kn_decode_hex(key, (char **) &decoded) != 0)
+	    if (kn_decode_hex(key, &decoded) != 0)
 	      return -1;
 	    ptr = decoded;
 	    break;
@@ -413,7 +413,7 @@ kn_decode_key(struct keynote_deckey *dc, char *key, int keytype)
 	    break;
 
 	case ENCODING_NATIVE:
-	    decoded = strdup(key);
+	    decoded = (unsigned char *)strdup(key);
 	    if (decoded == NULL) {
 		keynote_errno = ERROR_MEMORY;
 		return -1;
@@ -530,7 +530,7 @@ kn_decode_key(struct keynote_deckey *dc, char *key, int keytype)
 	}
 
 	/* RSA-specific */
-	dc->dec_key = pPublicKey->pkey.rsa;
+	dc->dec_key = EVP_PKEY_get0_RSA(pPublicKey);
 
 	free(ptr);
 	return 0;
@@ -547,7 +547,7 @@ kn_decode_key(struct keynote_deckey *dc, char *key, int keytype)
 	    return -1;
 	}
 
-	((struct keynote_binary *) dc->dec_key)->bn_key = decoded;
+	((struct keynote_binary *) dc->dec_key)->bn_key = (char *)decoded;
 	((struct keynote_binary *) dc->dec_key)->bn_len = len;
 	return RESULT_TRUE;
     }
@@ -566,11 +566,11 @@ kn_decode_key(struct keynote_deckey *dc, char *key, int keytype)
  * RESULT_FALSE otherwise.
  */
 int
-kn_keycompare(void *key1, void *key2, int algorithm)
+kn_keycompare(const void *key1, const void *key2, int algorithm)
 {
-    DSA *p1, *p2;
-    RSA *p3, *p4;
-    struct keynote_binary *bn1, *bn2;
+    const DSA *dsa1, *dsa2;
+    const BIGNUM *p1, *q1, *g1, *e1, *n1, *p2, *q2, *g2, *e2, *n2;
+    const struct keynote_binary *bn1, *bn2;
 
     if (key1 == NULL || key2 == NULL)
       return RESULT_FALSE;
@@ -584,30 +584,24 @@ kn_keycompare(void *key1, void *key2, int algorithm)
 	      return RESULT_FALSE;
 	    
 	case KEYNOTE_ALGORITHM_DSA:
-	    p1 = (DSA *) key1;
-	    p2 = (DSA *) key2;
-	    if (!BN_cmp(p1->p, p2->p) &&
-		!BN_cmp(p1->q, p2->q) &&
-		!BN_cmp(p1->g, p2->g) &&
-		!BN_cmp(p1->pub_key, p2->pub_key))
+	    dsa1 = (const DSA *)key1;
+	    dsa2 = (const DSA *)key2;
+	    DSA_get0_pqg(dsa1, &p1, &q1, &g1);
+	    DSA_get0_pqg(dsa2, &p2, &q2, &g2);
+	    if (!BN_cmp(p1, p2) &&
+		!BN_cmp(g1, q2) &&
+		!BN_cmp(q1, g2) &&
+		!BN_cmp(DSA_get0_pub_key(dsa1), DSA_get0_pub_key(dsa2)))
 	      return RESULT_TRUE;
 	    else
 	      return RESULT_FALSE;
 
 	case KEYNOTE_ALGORITHM_X509:
-            p3 = (RSA *) key1;
-            p4 = (RSA *) key2;
-            if (!BN_cmp(p3->n, p4->n) &&
-                !BN_cmp(p3->e, p4->e))
-              return RESULT_TRUE;
-            else
-	      return RESULT_FALSE;
-
 	case KEYNOTE_ALGORITHM_RSA:
-            p3 = (RSA *) key1;
-            p4 = (RSA *) key2;
-            if (!BN_cmp(p3->n, p4->n) &&
-                !BN_cmp(p3->e, p4->e))
+	    RSA_get0_key((const RSA *) key1, &n1, &e1, NULL);
+	    RSA_get0_key((const RSA *) key2, &n2, &e2, NULL);
+            if (!BN_cmp(n1, n2) &&
+                !BN_cmp(e1, e2))
               return RESULT_TRUE;
             else
 	      return RESULT_FALSE;
@@ -621,8 +615,8 @@ kn_keycompare(void *key1, void *key2, int algorithm)
 	    return RESULT_FALSE;
 
 	case KEYNOTE_ALGORITHM_BINARY:
-	    bn1 = (struct keynote_binary *) key1;
-	    bn2 = (struct keynote_binary *) key2;
+	    bn1 = (const struct keynote_binary *) key1;
+	    bn2 = (const struct keynote_binary *) key2;
 	    if ((bn1->bn_len == bn2->bn_len) &&
 		!memcmp(bn1->bn_key, bn2->bn_key, bn1->bn_len))
 	      return RESULT_TRUE;
@@ -642,11 +636,12 @@ int
 keynote_sigverify_assertion(struct assertion *as)
 {
     int hashtype, enc, intenc, alg = KEYNOTE_ALGORITHM_NONE, hashlen = 0;
-    unsigned char *sig, *decoded = NULL, *ptr;
+    unsigned char *decoded = NULL, *ptr;
+    char *sig;
     unsigned char res2[20];
     SHA_CTX shscontext;
     MD5_CTX md5context;
-    int len = 0;
+    size_t len = 0;
     DSA *dsa;
     RSA *rsa;
     if (as->as_signature == NULL ||
@@ -668,10 +663,9 @@ keynote_sigverify_assertion(struct assertion *as)
 	  (as->as_signeralgorithm == KEYNOTE_ALGORITHM_RSA)))
       return SIGRESULT_FALSE;
 
-    sig = strchr(as->as_signature, ':');   /* Move forward to the Encoding. We
-					   * are guaranteed to have a ':'
-					   * character, since this is a valid
-					   * signature */
+    /* Move forward to the Encoding. We are guaranteed to have a ':'
+     * character, since this is a valid signature */
+    sig = strchr(as->as_signature, ':');  
     sig++;
 
     switch (hashtype)
@@ -711,7 +705,7 @@ keynote_sigverify_assertion(struct assertion *as)
 
 	case ENCODING_HEX:
 	    len = strlen(sig) / 2;
-	    if (kn_decode_hex(sig, (char **) &decoded) != 0)
+	    if (kn_decode_hex(sig, &decoded) != 0)
 	      return -1;
 	    ptr = decoded;
 	    break;
@@ -739,7 +733,7 @@ keynote_sigverify_assertion(struct assertion *as)
 
 	case ENCODING_NATIVE:
 	    
-	    if ((decoded = strdup(sig)) == NULL) {
+	    if ((decoded = (unsigned char *)strdup(sig)) == NULL) {
 		keynote_errno = ERROR_MEMORY;
 		return -1;
 	    }
@@ -797,8 +791,10 @@ static char *
 keynote_sign_assertion(struct assertion *as, char *sigalg, void *key,
 		       int keyalg, int verifyflag)
 {
-    int slen, i, hashlen = 0, hashtype, alg, encoding, internalenc;
-    unsigned char *sig = NULL, *finalbuf = NULL;
+    int i, hashlen = 0, hashtype, alg, encoding, internalenc;
+    unsigned int slen;
+    unsigned char *finalbuf = NULL;
+    char *sig = NULL;
     unsigned char res2[LARGEST_HASH_SIZE], *sbuf = NULL;
     BIO *biokey = NULL;
     DSA *dsa = NULL;
@@ -836,7 +832,7 @@ keynote_sign_assertion(struct assertion *as, char *sigalg, void *key,
 	return NULL;
     }
 
-    sig = strchr(sigalg, ':');
+    sig = strchr((const char *)sigalg, ':');
     if (sig == NULL)
     {
 	keynote_errno = ERROR_SYNTAX;
@@ -853,7 +849,7 @@ keynote_sign_assertion(struct assertion *as, char *sigalg, void *key,
 	    SHA1_Init(&shscontext);
 	    SHA1_Update(&shscontext, as->as_startofsignature,
 			as->as_allbutsignature - as->as_startofsignature);
-	    SHA1_Update(&shscontext, sigalg, (char *) sig - sigalg);
+	    SHA1_Update(&shscontext, sigalg, sig - (char *)sigalg);
 	    SHA1_Final(res2, &shscontext);
 	    break;
    
@@ -863,7 +859,7 @@ keynote_sign_assertion(struct assertion *as, char *sigalg, void *key,
 	    MD5_Init(&md5context);
 	    MD5_Update(&md5context, as->as_startofsignature,
 		       as->as_allbutsignature - as->as_startofsignature);
-	    MD5_Update(&md5context, sigalg, (char *) sig - sigalg);
+	    MD5_Update(&md5context, sigalg, sig - (char *)sigalg);
 	    MD5_Final(res2, &md5context);
 	    break;
 
@@ -988,7 +984,7 @@ keynote_sign_assertion(struct assertion *as, char *sigalg, void *key,
 		return NULL;
 	    }
 
-	    slen = kn_encode_base64(sbuf, slen, finalbuf, 2 * slen);
+	    slen = kn_encode_base64(sbuf, slen, (char *)finalbuf, 2 * slen);
 	    free(sbuf);
 	    if (slen == -1) {
 	      free(finalbuf);
@@ -1003,7 +999,7 @@ keynote_sign_assertion(struct assertion *as, char *sigalg, void *key,
     }
 
     /* Replace as->as_signature */
-    len = strlen(sigalg) + strlen(finalbuf) + 1;
+    len = strlen((const char *)sigalg) + strlen((const char *)finalbuf) + 1;
     as->as_signature = calloc(len, sizeof(char));
     if (as->as_signature == NULL)
     {
@@ -1015,7 +1011,7 @@ keynote_sign_assertion(struct assertion *as, char *sigalg, void *key,
     /* Concatenate algorithm name and signature value */
     snprintf(as->as_signature, len, "%s%s", sigalg, finalbuf);
     free(finalbuf);
-    finalbuf = as->as_signature;
+    finalbuf = (unsigned char *)as->as_signature;
 
     /* Verify the newly-created signature if requested */
     if (verifyflag)
@@ -1174,7 +1170,6 @@ kn_encode_key(struct keynote_deckey *dc, int iencoding,
 	    return NULL;
 	}
 
-	dsa->write_params = 1;
 	if (keytype == KEYNOTE_PUBLIC_KEY)
 	  i2d_DSAPublicKey(dsa, (unsigned char **) &foo);
 	else
@@ -1182,7 +1177,7 @@ kn_encode_key(struct keynote_deckey *dc, int iencoding,
 
 	if (encoding == ENCODING_HEX)
 	{
-	    if (kn_encode_hex(ptr, &s, i) != 0)
+	    if (kn_encode_hex((const unsigned char *)ptr, &s, i) != 0)
 	    {
 		free(ptr);
 		return NULL;
@@ -1202,7 +1197,7 @@ kn_encode_key(struct keynote_deckey *dc, int iencoding,
 		  return NULL;
 	      }
 
-	      if (kn_encode_base64(ptr, i, s, 2 * i) == -1)
+	      if (kn_encode_base64((const unsigned char *)ptr, i, s, 2 * i) == -1)
 	      {
 		  free(s);
 		  free(ptr);
@@ -1245,7 +1240,7 @@ kn_encode_key(struct keynote_deckey *dc, int iencoding,
 
 	if (encoding == ENCODING_HEX)
 	{
-	    if (kn_encode_hex(ptr, &s, i) != 0)
+	    if (kn_encode_hex((const unsigned char *)ptr, &s, i) != 0)
 	    {
 		free(ptr);
 		return NULL;
@@ -1265,7 +1260,7 @@ kn_encode_key(struct keynote_deckey *dc, int iencoding,
 		  return NULL;
 	      }
 
-	      if (kn_encode_base64(ptr, i, s, 2 * i) == -1)
+	      if (kn_encode_base64((const unsigned char *)ptr, i, s, 2 * i) == -1)
 	      {
 		  free(s);
 		  free(ptr);
@@ -1286,7 +1281,8 @@ kn_encode_key(struct keynote_deckey *dc, int iencoding,
 
 	if (encoding == ENCODING_HEX)
 	{
-	    if (kn_encode_hex(bn->bn_key, &s, bn->bn_len) != 0)
+	    if (kn_encode_hex((const unsigned char *)bn->bn_key, &s,
+			      bn->bn_len) != 0)
 	      return NULL;
 
 	    return s;
@@ -1301,8 +1297,8 @@ kn_encode_key(struct keynote_deckey *dc, int iencoding,
 		  return NULL;
 	      }
 
-	      if (kn_encode_base64(bn->bn_key, bn->bn_len, s,
-				   2 * bn->bn_len) == -1)
+	      if (kn_encode_base64((const unsigned char *)bn->bn_key,
+				   bn->bn_len, s, 2 * bn->bn_len) == -1)
 	      {
 		  free(s);
 		  return NULL;

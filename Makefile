@@ -3,7 +3,8 @@
 LIB=	keynote
 MAN=	keynote.3 keynote.4 keynote.5
 NOPIC=	
-CFLAGS+= -Wall -I. -I${.CURDIR}
+CFLAGS+= -Wall
+CPPFLAGS+=-D_OPENBSD_SOURCE -I. -I${.CURDIR}
 LEXFLAGS = -Cr -Pkn -s -i
 YACCFLAGS = -d -p kn -b k
 

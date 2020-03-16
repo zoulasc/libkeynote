@@ -156,8 +156,7 @@ keynote_keygen(int argc, char *argv[])
     if (strlen(algname) + 2 > prlen)
     {
 	fprintf(stderr, "Parameter ``print-length'' should be larger "
-		"than the length of AlgorithmName (%lu)\n",
-		(unsigned long) strlen(algname));
+		"than the length of AlgorithmName (%zu)\n", strlen(algname));
 	exit(1);
     }
 

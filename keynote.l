@@ -44,7 +44,8 @@ struct lex_list
 static struct lex_list *keynote_lex_list = NULL;
 static int    keynote_max_lex_list = 32;
 static int    keynote_lex_counter = 0;
-static int    first_tok = 0;
+extern int    first_tok;
+int    first_tok = 0;
 %}
 digit		[0-9]
 specnumber      [1-9][0-9]*
